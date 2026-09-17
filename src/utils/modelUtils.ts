@@ -12,7 +12,7 @@ export interface ModelSpec {
   /** Explicit scale, used when a model is already metric (the city). */
   uniformScale?: number;
   /** Where the pivot ends up: feet on the floor, or the bounding-box centre. */
-  align?: 'bottom' | 'centre';
+  align?: 'bottom' | 'centre' | 'bones' | 'none';
   /** Also centre the model horizontally on its pivot. */
   recentreXZ?: boolean;
   /**
@@ -35,6 +35,7 @@ export interface NormalisedModel {
 
 const tmpBox = new THREE.Box3();
 const cornerVector = new THREE.Vector3();
+const boneBox = new THREE.Box3();
 
 /**
  * Measures an object from its geometry rather than via Box3.setFromObject.
@@ -53,19 +54,8 @@ export function measureObject(object: THREE.Object3D, target = new THREE.Box3())
     const mesh = child as THREE.Mesh;
     if (!mesh.isMesh || !mesh.geometry) return;
 
-    // A skinned mesh is drawn in the pose its skeleton dictates, which can
-    // differ from the raw geometry by a whole rotation - one of the character
-    // models has upright geometry but a bind pose lying on its back. Ask three
-    // for the skinned bounds so the measurement matches what is rendered.
-    const skinned = mesh as THREE.SkinnedMesh;
-    let box: THREE.Box3 | null;
-    if (skinned.isSkinnedMesh) {
-      skinned.computeBoundingBox();
-      box = skinned.boundingBox;
-    } else {
-      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
-      box = mesh.geometry.boundingBox;
-    }
+    if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+    const box = mesh.geometry.boundingBox;
     if (!box) return;
     for (let i = 0; i < 8; i++) {
       cornerVector.set(
@@ -77,6 +67,24 @@ export function measureObject(object: THREE.Object3D, target = new THREE.Box3())
     }
   });
   return target;
+}
+
+/**
+ * Bounds of a rig's bones. For a skinned model whose geometry and skeleton
+ * disagree about which way is up, the bones are the only description of where
+ * the character actually stands, so they are what the feet get aligned to.
+ */
+function measureBones(object: THREE.Object3D, target: THREE.Box3): boolean {
+  target.makeEmpty();
+  let found = false;
+  object.updateWorldMatrix(true, true);
+  object.traverse((child) => {
+    const bone = child as THREE.Bone;
+    if (!bone.isBone) return;
+    found = true;
+    target.expandByPoint(bone.getWorldPosition(cornerVector));
+  });
+  return found;
 }
 
 function stripMatching(root: THREE.Object3D, pattern: RegExp): void {
@@ -171,6 +179,14 @@ export function normaliseModel(gltf: GLTF, spec: ModelSpec): NormalisedModel {
     if (spec.recentreXZ !== false) {
       inner.position.x -= centre.x;
       inner.position.z -= centre.z;
+    }
+  } else if (spec.align === 'bones') {
+    // Ankle bones sit a little above the sole, so nudge the model down to suit.
+    if (measureBones(inner, boneBox)) {
+      inner.position.y -= boneBox.min.y - 0.02;
+      const boneCentre = boneBox.getCenter(new THREE.Vector3());
+      inner.position.x -= boneCentre.x;
+      inner.position.z -= boneCentre.z;
     }
   } else if (spec.align === 'centre') {
     inner.position.sub(centre);

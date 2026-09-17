@@ -67,7 +67,7 @@ function GalleryItem({
     };
   }, [gltf, modelKey]);
 
-  const tall = size.y > 0.8;
+  const tall = Math.max(size.x, size.y, size.z) > 0.8;
   const pedestal = tall ? 0 : 1;
   const dimensions = `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`;
 

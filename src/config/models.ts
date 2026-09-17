@@ -31,12 +31,13 @@ export const MODEL_SPECS: Record<ModelKey, ModelSpec> = {
     align: 'bottom',
   },
   npcRigged: {
-    // Exported lying down, so let the normaliser stand it up.
+    // Geometry and skeleton disagree by a rotation on this export: the mesh
+    // data lies along Z while the skin renders upright. Measure the geometry's
+    // long axis and leave the orientation to the skeleton.
     url: MODEL_URLS.npcRigged,
-    uprightAxis: 'auto',
     targetSize: 1.75,
-    measureAxis: 'y',
-    align: 'bottom',
+    measureAxis: 'z',
+    align: 'bones',
   },
   npcStatic: {
     url: MODEL_URLS.npcStatic,
