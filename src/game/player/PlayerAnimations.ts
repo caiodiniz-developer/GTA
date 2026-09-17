@@ -144,25 +144,25 @@ export class CharacterAnimator {
     this.hasSkeleton = this.bound.size >= 6;
   }
 
-  /** Rotates a bone by `angle` about a model-space axis, on top of its rest pose. */
-  private rotate(slot: SlotName, axis: THREE.Vector3, angle: number, additive = false): void {
-    const entry = this.bound.get(slot);
-    if (!entry || angle === 0) {
-      if (entry && !additive) entry.bone.quaternion.copy(entry.rest);
-      return;
-    }
-    tmpAxis.copy(axis).applyQuaternion(entry.toParent).normalize();
-    tmpQuat.setFromAxisAngle(tmpAxis, angle);
-    if (additive) {
-      entry.bone.quaternion.premultiply(tmpQuat);
-    } else {
-      entry.bone.quaternion.copy(tmpQuat).multiply(entry.rest);
-    }
+  /**
+   * Returns every driven bone to its bind pose.
+   *
+   * Each frame starts from rest and layers rotations on top. Without this the
+   * layered rotations below would compound frame after frame and limbs would
+   * simply spin.
+   */
+  private resetAll(): void {
+    for (const entry of this.bound.values()) entry.bone.quaternion.copy(entry.rest);
+    if (this.hips) this.hips.position.y = this.hipsRestY;
   }
 
-  private reset(slot: SlotName): void {
+  /** Layers a rotation of `angle` about a model-space axis onto the bone. */
+  private rotate(slot: SlotName, axis: THREE.Vector3, angle: number): void {
     const entry = this.bound.get(slot);
-    if (entry) entry.bone.quaternion.copy(entry.rest);
+    if (!entry || angle === 0) return;
+    tmpAxis.copy(axis).applyQuaternion(entry.toParent).normalize();
+    tmpQuat.setFromAxisAngle(tmpAxis, angle);
+    entry.bone.quaternion.premultiply(tmpQuat);
   }
 
   /**
@@ -191,6 +191,8 @@ export class CharacterAnimator {
     this.blend.walk += (targets.walk - this.blend.walk) * rate;
     this.blend.run += (targets.run - this.blend.run) * rate;
     this.lean += (THREE.MathUtils.clamp(turn, -1, 1) - this.lean) * rate;
+
+    this.resetAll();
 
     const airborne = gait === 'JUMP' || gait === 'FALL';
     if (gait === 'SIT') {
@@ -228,16 +230,16 @@ export class CharacterAnimator {
 
     // Arms: drop out of the T-pose first, then swing.
     this.applyArmRest();
-    this.rotate('leftArm', AXIS_X, armSwing, true);
-    this.rotate('rightArm', AXIS_X, armSwingOpposite, true);
-    this.rotate('leftForeArm', AXIS_X, -0.25 - 0.45 * this.blend.run, true);
-    this.rotate('rightForeArm', AXIS_X, -0.25 - 0.45 * this.blend.run, true);
+    this.rotate('leftArm', AXIS_X, armSwing);
+    this.rotate('rightArm', AXIS_X, armSwingOpposite);
+    this.rotate('leftForeArm', AXIS_X, -0.25 - 0.45 * this.blend.run);
+    this.rotate('rightForeArm', AXIS_X, -0.25 - 0.45 * this.blend.run);
 
     // Torso: lean into the run, counter-rotate with the stride, bank on turns.
     const forwardLean = 0.06 * this.blend.walk + 0.22 * this.blend.run;
     this.rotate('spine', AXIS_X, forwardLean + idleBreath);
-    this.rotate('spine', AXIS_Y, -0.09 * gaitAmount * swing, true);
-    this.rotate('spine', AXIS_Z, -this.lean * 0.12, true);
+    this.rotate('spine', AXIS_Y, -0.09 * gaitAmount * swing);
+    this.rotate('spine', AXIS_Z, -this.lean * 0.12);
     this.rotate('chest', AXIS_Y, 0.06 * gaitAmount * swing);
     this.rotate('head', AXIS_X, -forwardLean * 0.7);
 
@@ -246,7 +248,7 @@ export class CharacterAnimator {
       const bob = gaitAmount * (0.035 + 0.03 * this.blend.run) * bounce;
       this.hips.position.y = this.hipsRestY + bob - 0.02 * this.blend.run;
       this.rotate('hips', AXIS_Z, -this.lean * 0.1);
-      this.rotate('hips', AXIS_Y, 0.05 * gaitAmount * swingOpposite, true);
+      this.rotate('hips', AXIS_Y, 0.05 * gaitAmount * swingOpposite);
     }
   }
 
@@ -261,17 +263,15 @@ export class CharacterAnimator {
 
   private applyAirbornePose(rising: boolean): void {
     this.applyArmRest();
-    this.rotate('leftArm', AXIS_X, rising ? -0.9 : -1.5, true);
-    this.rotate('rightArm', AXIS_X, rising ? -0.9 : -1.5, true);
-    this.rotate('leftForeArm', AXIS_X, -0.5, true);
-    this.rotate('rightForeArm', AXIS_X, -0.5, true);
+    this.rotate('leftArm', AXIS_X, rising ? -0.9 : -1.5);
+    this.rotate('rightArm', AXIS_X, rising ? -0.9 : -1.5);
+    this.rotate('leftForeArm', AXIS_X, -0.5);
+    this.rotate('rightForeArm', AXIS_X, -0.5);
     this.rotate('leftUpLeg', AXIS_X, rising ? 0.55 : 0.2);
     this.rotate('rightUpLeg', AXIS_X, rising ? 0.15 : -0.1);
     this.rotate('leftLeg', AXIS_X, rising ? -1.0 : -0.4);
     this.rotate('rightLeg', AXIS_X, rising ? -0.35 : -0.2);
     this.rotate('spine', AXIS_X, rising ? 0.12 : -0.08);
-    this.reset('head');
-    if (this.hips) this.hips.position.y = this.hipsRestY;
   }
 
   /** Seated pose for driving: thighs forward, knees bent, hands up on a wheel. */
@@ -281,25 +281,24 @@ export class CharacterAnimator {
     this.rotate('leftLeg', AXIS_X, -1.5);
     this.rotate('rightLeg', AXIS_X, -1.5);
     this.applyArmRest();
-    this.rotate('leftArm', AXIS_X, -0.75, true);
-    this.rotate('rightArm', AXIS_X, -0.75, true);
-    this.rotate('leftForeArm', AXIS_X, -0.95, true);
-    this.rotate('rightForeArm', AXIS_X, -0.95, true);
+    this.rotate('leftArm', AXIS_X, -0.75);
+    this.rotate('rightArm', AXIS_X, -0.75);
+    this.rotate('leftForeArm', AXIS_X, -0.95);
+    this.rotate('rightForeArm', AXIS_X, -0.95);
     this.rotate('spine', AXIS_X, 0.12);
-    this.reset('head');
-    if (this.hips) this.hips.position.y = this.hipsRestY;
   }
 
   /** Aiming layer: torso turns to camera, weapon arm comes up. */
   applyAimPose(pitch: number): void {
     if (!this.hasSkeleton) return;
+    this.resetAll();
     this.applyArmRest();
-    this.rotate('rightArm', AXIS_X, -1.5 - pitch * 0.5, true);
-    this.rotate('rightArm', AXIS_Y, -0.25, true);
-    this.rotate('leftArm', AXIS_X, -1.3 - pitch * 0.5, true);
-    this.rotate('leftArm', AXIS_Y, 0.55, true);
-    this.rotate('leftForeArm', AXIS_X, -0.5, true);
-    this.rotate('rightForeArm', AXIS_X, -0.15, true);
+    this.rotate('rightArm', AXIS_X, -1.5 - pitch * 0.5);
+    this.rotate('rightArm', AXIS_Y, -0.25);
+    this.rotate('leftArm', AXIS_X, -1.3 - pitch * 0.5);
+    this.rotate('leftArm', AXIS_Y, 0.55);
+    this.rotate('leftForeArm', AXIS_X, -0.5);
+    this.rotate('rightForeArm', AXIS_X, -0.15);
     this.rotate('spine', AXIS_Y, -0.2);
     this.rotate('chest', AXIS_Y, -0.15);
   }
