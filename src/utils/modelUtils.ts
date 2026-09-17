@@ -15,6 +15,11 @@ export interface ModelSpec {
   align?: 'bottom' | 'centre';
   /** Also centre the model horizontally on its pivot. */
   recentreXZ?: boolean;
+  /**
+   * Rotates the model so its longest axis points up. Use for characters that
+   * were exported Z-up and therefore arrive lying on the floor.
+   */
+  uprightAxis?: 'auto';
   /** Nodes matching this are deleted (Sketchfab backdrops, fake shadow quads). */
   stripNodes?: RegExp;
 }
@@ -29,6 +34,50 @@ export interface NormalisedModel {
 }
 
 const tmpBox = new THREE.Box3();
+const cornerVector = new THREE.Vector3();
+
+/**
+ * Measures an object from its geometry rather than via Box3.setFromObject.
+ *
+ * setFromObject is not dependable on these models: for the skinned characters
+ * it reports a box a hundred times too large with the axes permuted, because
+ * it takes the skeleton's current pose into account. Walking the meshes and
+ * transforming each geometry's own bounding box by its world matrix gives the
+ * bind-pose extents, which is exactly what scale normalisation needs, and it
+ * gives the same answer every time.
+ */
+export function measureObject(object: THREE.Object3D, target = new THREE.Box3()): THREE.Box3 {
+  target.makeEmpty();
+  object.updateWorldMatrix(true, true);
+  object.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+
+    // A skinned mesh is drawn in the pose its skeleton dictates, which can
+    // differ from the raw geometry by a whole rotation - one of the character
+    // models has upright geometry but a bind pose lying on its back. Ask three
+    // for the skinned bounds so the measurement matches what is rendered.
+    const skinned = mesh as THREE.SkinnedMesh;
+    let box: THREE.Box3 | null;
+    if (skinned.isSkinnedMesh) {
+      skinned.computeBoundingBox();
+      box = skinned.boundingBox;
+    } else {
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+      box = mesh.geometry.boundingBox;
+    }
+    if (!box) return;
+    for (let i = 0; i < 8; i++) {
+      cornerVector.set(
+        i & 1 ? box.max.x : box.min.x,
+        i & 2 ? box.max.y : box.min.y,
+        i & 4 ? box.max.z : box.min.z,
+      );
+      target.expandByPoint(cornerVector.applyMatrix4(mesh.matrixWorld));
+    }
+  });
+  return target;
+}
 
 function stripMatching(root: THREE.Object3D, pattern: RegExp): void {
   const doomed: THREE.Object3D[] = [];
@@ -81,17 +130,27 @@ export function normaliseModel(gltf: GLTF, spec: ModelSpec): NormalisedModel {
   if (spec.stripNodes) stripMatching(source, spec.stripNodes);
   stripBackdropPlanes(source);
 
-  const inner = new THREE.Group();
-  inner.add(source);
-  if (spec.preRotation) inner.rotation.set(...spec.preRotation);
-  inner.updateWorldMatrix(true, true);
-
   const root = new THREE.Group();
+  const inner = new THREE.Group();
   root.add(inner);
+  inner.add(source);
+
+  if (spec.preRotation) inner.rotation.set(...spec.preRotation);
 
   // Measure with the pre-rotation applied but before scaling.
-  tmpBox.setFromObject(inner);
-  const rawSize = tmpBox.getSize(new THREE.Vector3());
+  measureObject(inner, tmpBox);
+  let rawSize = tmpBox.getSize(new THREE.Vector3());
+
+  // Stand a model up if it was authored with a different up axis. Doing this
+  // from the measurement rather than a hand-written rotation keeps it correct
+  // whichever way round the exporter left the model.
+  if (spec.uprightAxis === 'auto') {
+    const longest = Math.max(rawSize.x, rawSize.y, rawSize.z);
+    if (longest === rawSize.z) inner.rotation.x -= Math.PI / 2;
+    else if (longest === rawSize.x) inner.rotation.z += Math.PI / 2;
+    measureObject(inner, tmpBox);
+    rawSize = tmpBox.getSize(new THREE.Vector3());
+  }
 
   let scale = spec.uniformScale ?? 1;
   if (spec.targetSize !== undefined) {
@@ -101,10 +160,9 @@ export function normaliseModel(gltf: GLTF, spec: ModelSpec): NormalisedModel {
     if (measured > 1e-6) scale = spec.targetSize / measured;
   }
   inner.scale.setScalar(scale);
-  inner.updateWorldMatrix(true, true);
 
   // Re-measure at final scale, then move the pivot where gameplay expects it.
-  tmpBox.setFromObject(inner);
+  measureObject(inner, tmpBox);
   const size = tmpBox.getSize(new THREE.Vector3());
   const centre = tmpBox.getCenter(new THREE.Vector3());
 
@@ -121,8 +179,7 @@ export function normaliseModel(gltf: GLTF, spec: ModelSpec): NormalisedModel {
     inner.position.z -= centre.z;
   }
 
-  inner.updateWorldMatrix(true, true);
-  tmpBox.setFromObject(inner);
+  measureObject(inner, tmpBox);
 
   return {
     scene: root,

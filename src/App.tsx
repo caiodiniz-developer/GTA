@@ -5,11 +5,16 @@ import { World } from './game/world/World';
 import { HUD } from './ui/HUD/HUD';
 import { LoadingScreen } from './ui/LoadingScreen';
 import { useInput } from './hooks/useInput';
+import { ModelGallery } from './game/debug/ModelGallery';
 import { useGameStore } from './stores/gameStore';
 import { QUALITY_PRESETS, useSettingsStore } from './stores/settingsStore';
 
 export default function App(): React.JSX.Element {
   useInput();
+
+  // Dev asset inspector: ?debug=models lays every GLB out on a metre grid.
+  const debugMode =
+    import.meta.env.DEV && new URLSearchParams(window.location.search).get("debug");
 
   const gameState = useGameStore((state) => state.state);
   const setState = useGameStore((state) => state.setState);
@@ -20,6 +25,8 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     if (gameState === 'MAIN_MENU') setState('LOADING');
   }, [gameState, setState]);
+
+  if (debugMode === "models") return <ModelGallery />;
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-neutral-950">

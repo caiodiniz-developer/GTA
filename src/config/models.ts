@@ -31,9 +31,9 @@ export const MODEL_SPECS: Record<ModelKey, ModelSpec> = {
     align: 'bottom',
   },
   npcRigged: {
-    // Authored Z-up and lying along -Z; stand it upright first.
+    // Exported lying down, so let the normaliser stand it up.
     url: MODEL_URLS.npcRigged,
-    preRotation: [-Math.PI / 2, 0, 0],
+    uprightAxis: 'auto',
     targetSize: 1.75,
     measureAxis: 'y',
     align: 'bottom',
