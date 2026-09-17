@@ -53,3 +53,6 @@ export const CAMERA = {
   /** Radians per pixel of mouse movement. */
   sensitivity: 0.0026,
 } as const;
+
+/** Fixed physics step. Vehicle controllers must advance in lockstep with it. */
+export const PHYSICS_STEP = 1 / 60;

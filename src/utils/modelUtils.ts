@@ -155,9 +155,15 @@ export interface BoxColliderData {
  */
 export function extractBoxColliders(
   root: THREE.Object3D,
-  options: { minHeight?: number; maxBoxes?: number } = {},
+  options: {
+    minHeight?: number;
+    maxBoxes?: number;
+    skipBelowY?: number;
+    /** Final say on each candidate box; used to reject boxes over open road. */
+    accept?: (box: BoxColliderData) => boolean;
+  } = {},
 ): BoxColliderData[] {
-  const { minHeight = 0.6, maxBoxes = 400 } = options;
+  const { minHeight = 0.6, maxBoxes = 400, skipBelowY = -Infinity, accept } = options;
   const colliders: BoxColliderData[] = [];
   const box = new THREE.Box3();
   const size = new THREE.Vector3();
@@ -171,12 +177,19 @@ export function extractBoxColliders(
     if (box.isEmpty()) return;
     box.getSize(size);
     box.getCenter(centre);
+    // A road or pavement mesh that merely dips would otherwise become a solid
+    // box filling the space *above* the road, which vehicles then rest on.
+    // Only genuinely tall geometry that rises clear of the street becomes a
+    // collider; the ground slab already carries everything at street level.
     if (size.y < minHeight) return;
+    if (box.max.y < skipBelowY) return;
     if (size.x < 0.1 || size.z < 0.1) return;
-    colliders.push({
+    const candidate: BoxColliderData = {
       position: [centre.x, centre.y, centre.z],
       halfExtents: [size.x / 2, size.y / 2, size.z / 2],
-    });
+    };
+    if (accept && !accept(candidate)) return;
+    colliders.push(candidate);
   });
 
   // Largest volumes first so a truncated list still blocks the big facades.

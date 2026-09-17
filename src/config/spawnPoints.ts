@@ -23,18 +23,18 @@ export const PLAYER_SPAWN: SpawnPoint = {
 
 /** Roomy spots (>= 8 m clearance) suitable for parked cars. */
 export const VEHICLE_SPAWNS: SpawnPoint[] = [
-  { id: 'veh_01', position: [-11.3, 0.4, -26.8], rotation: 0 },
-  { id: 'veh_02', position: [18.7, 0.4, -38.8], rotation: Math.PI / 2 },
-  { id: 'veh_03', position: [32.7, 0.4, 11.2], rotation: Math.PI },
-  { id: 'veh_04', position: [-11.3, 0.4, 13.2], rotation: 0 },
-  { id: 'veh_05', position: [-11.3, 0.4, 33.2], rotation: 0 },
-  { id: 'veh_06', position: [36.7, 0.4, -8.8], rotation: -Math.PI / 2 },
-  { id: 'veh_07', position: [-37.3, 0.4, 11.2], rotation: Math.PI / 2 },
-  { id: 'veh_08', position: [26.7, 0.4, 29.2], rotation: Math.PI },
-  { id: 'veh_09', position: [26.7, 0.4, 49.2], rotation: 0 },
-  { id: 'veh_10', position: [-41.3, 0.4, 53.2], rotation: Math.PI / 2 },
-  { id: 'veh_11', position: [-29.3, 0.4, -32.8], rotation: 0 },
-  { id: 'veh_12', position: [6.7, 0.4, -24.8], rotation: Math.PI },
+  { id: 'veh_01', position: [-11.3, 0.3, -26.8], rotation: 0 },
+  { id: 'veh_02', position: [18.7, 0.3, -38.8], rotation: Math.PI / 2 },
+  { id: 'veh_03', position: [32.7, 0.3, 11.2], rotation: Math.PI },
+  { id: 'veh_04', position: [-11.3, 0.3, 13.2], rotation: 0 },
+  { id: 'veh_05', position: [-11.3, 0.3, 33.2], rotation: 0 },
+  { id: 'veh_06', position: [36.7, 0.3, -8.8], rotation: -Math.PI / 2 },
+  { id: 'veh_07', position: [-37.3, 0.3, 11.2], rotation: Math.PI / 2 },
+  { id: 'veh_08', position: [26.7, 0.3, 29.2], rotation: Math.PI },
+  { id: 'veh_09', position: [26.7, 0.3, 49.2], rotation: 0 },
+  { id: 'veh_10', position: [-41.3, 0.3, 53.2], rotation: Math.PI / 2 },
+  { id: 'veh_11', position: [-29.3, 0.3, -32.8], rotation: 0 },
+  { id: 'veh_12', position: [6.7, 0.3, -24.8], rotation: Math.PI },
 ];
 
 /** Points of interest the phone map and minimap advertise. */

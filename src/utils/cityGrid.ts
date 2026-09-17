@@ -113,6 +113,66 @@ export function allOpenCells(): { x: number; z: number }[] {
   return list;
 }
 
+export interface GridBox {
+  position: [number, number, number];
+  halfExtents: [number, number, number];
+}
+
+/**
+ * Builds wall collision straight from the street grid.
+ *
+ * Deriving colliders from each mesh's bounding box does not work on this city:
+ * several meshes are whole blocks tens of metres across, so their boxes swallow
+ * the roads beside them and cars climb invisible kerbs. The baked grid, on the
+ * other hand, records exactly which 2 m cells are drivable, so every *blocked*
+ * cell becomes wall instead. Adjacent blocked cells are greedily merged into
+ * larger rectangles to keep the collider count low.
+ *
+ * @param height How tall each wall box is, in metres.
+ */
+export function buildCollisionBoxes(height = 40): GridBox[] {
+  const used = new Uint8Array(cols * rows);
+  const boxes: GridBox[] = [];
+
+  const blocked = (cx: number, cz: number): boolean =>
+    cx >= 0 && cx < cols && cz >= 0 && cz < rows && !cellOpen(cx, cz) && !used[cz * cols + cx];
+
+  for (let cz = 0; cz < rows; cz++) {
+    for (let cx = 0; cx < cols; cx++) {
+      if (!blocked(cx, cz)) continue;
+
+      // Grow right as far as possible, then down while the full row matches.
+      let width = 1;
+      while (blocked(cx + width, cz)) width++;
+
+      let depth = 1;
+      grow: while (cz + depth < rows) {
+        for (let x = cx; x < cx + width; x++) {
+          if (!blocked(x, cz + depth)) break grow;
+        }
+        depth++;
+      }
+
+      for (let z = cz; z < cz + depth; z++) {
+        for (let x = cx; x < cx + width; x++) used[z * cols + x] = 1;
+      }
+
+      const halfWidth = (width * step) / 2;
+      const halfDepth = (depth * step) / 2;
+      boxes.push({
+        position: [
+          minX + cx * step - step / 2 + halfWidth,
+          groundY + height / 2,
+          minZ + cz * step - step / 2 + halfDepth,
+        ],
+        halfExtents: [halfWidth, height / 2, halfDepth],
+      });
+    }
+  }
+
+  return boxes;
+}
+
 /** Renders the grid to a canvas once, for the minimap background. */
 export function renderGridToCanvas(pixelsPerCell = 2): HTMLCanvasElement {
   const canvas = document.createElement('canvas');

@@ -29,8 +29,20 @@ export const QUALITY_PRESETS = {
   HIGH: { shadows: true, dpr: [1, 2] as [number, number], npcBudget: 18, trafficBudget: 14 },
 } as const;
 
+/**
+ * Allows ?graphics=LOW in the URL to force a preset before the canvas is
+ * created. Handy on weak machines, and it is the only way to pick a preset
+ * that affects Canvas-level options like shadows, which are read once.
+ */
+function initialGraphics(): GraphicsQuality {
+  if (typeof window === 'undefined') return 'MEDIUM';
+  const requested = new URLSearchParams(window.location.search).get('graphics');
+  const upper = requested?.toUpperCase();
+  return upper === 'LOW' || upper === 'MEDIUM' || upper === 'HIGH' ? upper : 'MEDIUM';
+}
+
 export const useSettingsStore = create<SettingsState>((set) => ({
-  graphics: 'MEDIUM',
+  graphics: initialGraphics(),
   masterVolume: 0.8,
   musicVolume: 0.5,
   sfxVolume: 0.9,

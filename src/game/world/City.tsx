@@ -4,29 +4,34 @@ import { useGLTF } from '@react-three/drei';
 import { CuboidCollider, RigidBody } from '@react-three/rapier';
 import { MODEL_SPECS, MODEL_URLS } from '../../config/models';
 import { CITY_OFFSET } from '../../config/world';
-import {
-  extractBoxColliders,
-  normaliseModel,
-  prepareForRender,
-  type BoxColliderData,
-} from '../../utils/modelUtils';
-import { CITY_BOUNDS, GROUND_Y } from '../../utils/cityGrid';
+import { normaliseModel, prepareForRender } from '../../utils/modelUtils';
+import { CITY_BOUNDS, GROUND_Y, buildCollisionBoxes } from '../../utils/cityGrid';
+
+/** Depth of the road slab; generous so nothing can tunnel through it. */
+const GROUND_THICKNESS = 16;
+
+/** How tall the wall boxes are. Comfortably above anything that can jump. */
+const WALL_HEIGHT = 40;
 
 /**
- * The city is a single static GLB. Rather than wrapping it in one enormous box
- * (which would make the streets unusable) or a 93k-triangle trimesh (slow to
- * build and heavy to query), we derive one simplified cuboid collider per
- * building-sized mesh and let a single ground plane carry the roads.
+ * The city: one static GLB for the visuals, with collision derived from the
+ * baked street grid rather than from the mesh hierarchy.
+ *
+ * Per-mesh bounding boxes are not usable on this model - several meshes are
+ * entire blocks tens of metres across, so their boxes swallow the roads beside
+ * them and vehicles climb invisible kerbs. The grid records which 2 m cells are
+ * actually drivable, so the blocked cells become the walls and the streets stay
+ * clear.
  */
 export function City(): React.JSX.Element {
   const gltf = useGLTF(MODEL_URLS.city);
 
-  const { scene, colliders } = useMemo(() => {
+  const scene = useMemo(() => {
     const normalised = normaliseModel(gltf, MODEL_SPECS.city);
     prepareForRender(normalised.scene, false);
 
-    // Buildings receive but do not cast into themselves; casting from 111
-    // meshes at this scale costs more than it adds.
+    // Buildings receive shadows but do not cast them; casting from 111 meshes
+    // at this scale costs more than it adds.
     normalised.scene.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (mesh.isMesh) {
@@ -37,10 +42,16 @@ export function City(): React.JSX.Element {
 
     normalised.scene.position.set(...(CITY_OFFSET as unknown as [number, number, number]));
     normalised.scene.updateWorldMatrix(true, true);
-
-    const boxes = extractBoxColliders(normalised.scene, { minHeight: 1.2, maxBoxes: 260 });
-    return { scene: normalised.scene, colliders: boxes as BoxColliderData[] };
+    return normalised.scene;
   }, [gltf]);
+
+  const walls = useMemo(() => {
+    const boxes = buildCollisionBoxes(WALL_HEIGHT);
+    if (import.meta.env.DEV) {
+      console.info(`[City] ${boxes.length} wall colliders from the street grid`);
+    }
+    return boxes;
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -62,17 +73,17 @@ export function City(): React.JSX.Element {
       <primitive object={scene} />
 
       <RigidBody type="fixed" colliders={false} friction={1}>
-        {/* Streets and pavements: one flat slab under the whole map. */}
+        {/*
+          Streets and pavements: one deep slab under the whole map. It is far
+          thicker than it needs to be so a fast car can never tunnel through it
+          on a long physics step.
+        */}
         <CuboidCollider
-          args={[groundWidth / 2, 0.5, groundDepth / 2]}
-          position={[groundCentreX, GROUND_Y - 0.5, groundCentreZ]}
+          args={[groundWidth / 2, GROUND_THICKNESS / 2, groundDepth / 2]}
+          position={[groundCentreX, GROUND_Y - GROUND_THICKNESS / 2, groundCentreZ]}
         />
-        {colliders.map((box, index) => (
-          <CuboidCollider
-            key={index}
-            args={box.halfExtents}
-            position={box.position}
-          />
+        {walls.map((box, index) => (
+          <CuboidCollider key={index} args={box.halfExtents} position={box.position} />
         ))}
       </RigidBody>
     </>

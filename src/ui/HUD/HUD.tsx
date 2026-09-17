@@ -1,11 +1,15 @@
 import { useEffect, useRef } from 'react';
 import { useGameStore } from '../../stores/gameStore';
 import { usePlayerStore } from '../../stores/playerStore';
+import { useUiStore } from '../../stores/uiStore';
+import { useVehicleStore } from '../../stores/vehicleStore';
 import { gameRefs } from '../../game/gameRefs';
+import { InteractionPrompt } from './InteractionPrompt';
+import { Speedometer } from './Speedometer';
 import { TutorialHints } from './TutorialHints';
 
-/** Reads gameRefs directly each frame so speed never re-renders React. */
-function SpeedReadout(): React.JSX.Element {
+/** On-foot pace readout; reads refs each frame rather than React state. */
+function OnFootSpeed(): React.JSX.Element {
   const valueRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
@@ -36,8 +40,15 @@ export function HUD(): React.JSX.Element | null {
   const clock = useGameStore((state) => state.clock);
   const money = usePlayerStore((state) => state.money);
   const health = usePlayerStore((state) => state.health);
+  const toast = useUiStore((state) => state.toast);
+  const activeVehicleId = useVehicleStore((state) => state.activeVehicleId);
+  const vehicles = useVehicleStore((state) => state.vehicles);
 
   if (gameState !== 'PLAYING') return null;
+
+  const activeVehicle = activeVehicleId
+    ? vehicles.find((vehicle) => vehicle.id === activeVehicleId)
+    : undefined;
 
   const hours = Math.floor(clock);
   const minutes = Math.floor((clock - hours) * 60);
@@ -54,18 +65,29 @@ export function HUD(): React.JSX.Element | null {
         </div>
       </div>
 
-      {/* Bottom right: speed + health */}
+      {/* Bottom right: speed, swapping to the vehicle cluster while driving */}
       <div className="absolute bottom-6 right-6 flex flex-col items-end gap-3">
-        <SpeedReadout />
-        <div className="h-[3px] w-32 overflow-hidden rounded-full bg-white/15">
-          <div
-            className="h-full rounded-full bg-white transition-[width] duration-300"
-            style={{ width: `${health}%` }}
-          />
-        </div>
+        {activeVehicle ? <Speedometer kind={activeVehicle.kind} /> : <OnFootSpeed />}
+        {!activeVehicle && (
+          <div className="h-[3px] w-32 overflow-hidden rounded-full bg-white/15">
+            <div
+              className="h-full rounded-full bg-white transition-[width] duration-300"
+              style={{ width: `${health}%` }}
+            />
+          </div>
+        )}
       </div>
 
-      <TutorialHints />
+      {toast && (
+        <div className="absolute bottom-28 left-1/2 -translate-x-1/2">
+          <div className="rounded-sm border border-white/10 bg-black/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-amber-400 backdrop-blur-sm">
+            {toast}
+          </div>
+        </div>
+      )}
+
+      <InteractionPrompt />
+      {!activeVehicle && <TutorialHints />}
     </div>
   );
 }

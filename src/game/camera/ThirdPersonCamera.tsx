@@ -142,6 +142,7 @@ export function ThirdPersonCamera(): null {
     currentLook.current.z = THREE.MathUtils.damp(currentLook.current.z, lookTarget.z, 20, dt);
 
     camera.position.copy(currentPosition.current);
+    gameRefs.cameraPosition.copy(camera.position);
     camera.lookAt(currentLook.current);
 
     // A touch of extra FOV at speed sells the sense of momentum.

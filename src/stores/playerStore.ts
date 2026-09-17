@@ -9,6 +9,7 @@ export type PlayerMotionState =
   | 'AIM'
   | 'SHOOT'
   | 'ENTERING_VEHICLE'
+  | 'DRIVING'
   | 'EXITING_VEHICLE'
   | 'DEAD';
 

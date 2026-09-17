@@ -33,6 +33,7 @@ const MOTION_TO_GAIT: Record<string, GaitName> = {
   AIM: 'AIM',
   SHOOT: 'AIM',
   ENTERING_VEHICLE: 'IDLE',
+  DRIVING: 'SIT',
   EXITING_VEHICLE: 'IDLE',
   DEAD: 'IDLE',
 };
@@ -80,7 +81,32 @@ export function Player(): React.JSX.Element {
     if (!body || !collider || !visual) return;
 
     const gameState = useGameStore.getState().state;
-    const locked = gameState !== 'PLAYING' || gameRefs.activeVehicleId !== null;
+    const driving = gameRefs.activeVehicleId !== null;
+    const locked = gameState !== 'PLAYING' || driving;
+
+    // Another system asked to move the capsule (stepping out of a car, or a
+    // respawn). Apply it before this frame's movement so it is not fought.
+    const teleport = gameRefs.pendingTeleport;
+    if (teleport) {
+      controller.teleport(body, teleport.x, teleport.y, teleport.z);
+      if (teleport.heading !== undefined) controller.setHeading(teleport.heading);
+      gameRefs.pendingTeleport = null;
+    }
+
+    // While driving, the character is hidden and the car owns the camera.
+    //
+    // The capsule is also switched off. It is a kinematic body, so to the
+    // solver it is effectively infinitely heavy: left standing in the road
+    // where the player got in, it silently pins the car in place no matter how
+    // much engine force is applied.
+    if (driving) {
+      visual.visible = false;
+      if (collider.isEnabled()) collider.setEnabled(false);
+      setMotionState('DRIVING');
+      return;
+    }
+    if (!collider.isEnabled()) collider.setEnabled(true);
+    visual.visible = true;
 
     const result = controller.update(
       delta,
